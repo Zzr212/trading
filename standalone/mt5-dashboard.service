@@ -1,0 +1,23 @@
+[Unit]
+Description=MT5 Trading Bot Live Monitoring Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/mt5-dashboard
+ExecStart=/usr/bin/node /var/www/mt5-dashboard/server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=80
+Environment=API_KEY=promijeni-ovo-u-tajni-kljuc
+Environment=DB_PATH=/var/www/mt5-dashboard/database.db
+
+# Sigurnosne i limit postavke
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=mt5-dashboard
+
+[Install]
+WantedBy=multi-user.target

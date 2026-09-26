@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MT5 Live Trading Monitor | Oracle VPS 92.5.176.43</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Chart.js za 30-dnevni P/L graf -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="brand-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+          <polyline points="16 7 22 7 22 13"></polyline>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">MT5 BOT MONITOR</h1>
+        <span class="server-ip-tag">HOST: 92.5.176.43:80</span>
+      </div>
+    </div>
+
+    <div class="nav-status-group">
+      <!-- Status EA -->
+      <div id="ea-status-pill" class="status-badge status-online">
+        <span class="pulse-dot"></span>
+        <span id="ea-status-text">EA ONLINE</span>
+        <span id="ea-status-timer" class="status-sub">0s</span>
+      </div>
+
+      <!-- Account Info Badge -->
+      <div class="account-badge">
+        <span class="acc-label">RAČUN:</span>
+        <span id="header-account-id" class="acc-val">---</span>
+        <span id="header-broker" class="acc-broker">---</span>
+      </div>
+
+      <!-- Refresh indicator -->
+      <div class="refresh-indicator" title="Osvježava se automatski svakih 5s">
+        <div id="countdown-circle" class="circle-progress"></div>
+        <button id="btn-manual-refresh" class="btn-icon" title="Osvježi ručno">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="dashboard-content">
+
+    <!-- Warning Banner ako je EA Offline (>2 min) -->
+    <div id="offline-banner" class="alert-banner hidden">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <div>
+        <strong>UPOZORENJE: MT5 EA NIJE POSLAO HEARTBEAT VIŠE OD 2 MINUTE!</strong>
+        <span id="offline-banner-time">Provjerite MT5 terminal, internet vezu ili 'Allow WebRequest' opciju u MT5.</span>
+      </div>
+    </div>
+
+    <!-- Day Limit Reached Banner -->
+    <div id="limit-banner" class="alert-banner banner-danger hidden">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+      </svg>
+      <div>
+        <strong>DNEVNI LIMIT GUBITKA / PROFITA DOSEGNUT (DAY_LIMIT_HIT)!</strong>
+        <span>Bot je automatski pauzirao trgovanje za danas radi zaštite računa.</span>
+      </div>
+    </div>
+
+    <!-- Metric Cards Grid -->
+    <section class="metrics-grid">
+      <!-- Balance -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-label">STANJE RAČUNA (BALANCE)</span>
+          <span class="currency-tag" id="currency-tag-1">USD</span>
+        </div>
+        <div class="card-value font-mono" id="val-balance">$0.00</div>
+        <div class="card-footer">
+          <span>Broker: <strong id="val-broker">---</strong></span>
+        </div>
+      </div>
+
+      <!-- Equity -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-label">KAPITAL (EQUITY)</span>
+          <span class="badge-sub" id="equity-delta-badge">+0.00</span>
+        </div>
+        <div class="card-value font-mono" id="val-equity">$0.00</div>
+        <div class="card-footer">
+          <span>Slobodno: <strong id="val-free-margin" class="font-mono">$0.00</strong></span>
+        </div>
+      </div>
+
+      <!-- Daily PnL -->
+      <div class="metric-card highlight-card">
+        <div class="card-header">
+          <span class="card-label">DNEVNI P/L (TODAY)</span>
+          <span id="daily-pnl-pct" class="badge-sub font-mono">+0.0%</span>
+        </div>
+        <div class="card-value font-mono" id="val-daily-pnl">$0.00</div>
+        <div class="card-footer">
+          <span>Status limita: <strong id="val-day-limit" class="status-safe">SIGURNO</strong></span>
+        </div>
+      </div>
+
+      <!-- Margin & Margin Level -->
+      <div class="metric-card">
+        <div class="card-header">
+          <span class="card-label">MARŽA / MARGIN LEVEL</span>
+          <span class="badge-sub" id="val-open-count-badge">0 POZICIJA</span>
+        </div>
+        <div class="card-value font-mono" id="val-margin-level">---%</div>
+        <div class="card-footer">
+          <span>Zauzeta marža: <strong id="val-margin" class="font-mono">$0.00</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main 2-Column Grid: Open Positions & 30-Day Chart -->
+    <section class="grid-2col">
+      
+      <!-- Open Positions Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h2 class="panel-title">TRENUTNO OTVORENE POZICIJE</h2>
+            <span id="pos-count-tag" class="count-pill">0</span>
+          </div>
+          <div class="panel-actions">
+            <span class="floating-pnl-label">Nerealizirani P/L:</span>
+            <span id="total-floating-profit" class="floating-pnl-val font-mono">$0.00</span>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>TICKET</th>
+                <th>SIMBOL</th>
+                <th>TIP</th>
+                <th>LOT</th>
+                <th>OPEN</th>
+                <th>CURRENT</th>
+                <th>S/L</th>
+                <th>T/P</th>
+                <th class="text-right">PROFIT</th>
+                <th>VRIJEME</th>
+              </tr>
+            </thead>
+            <tbody id="positions-tbody">
+              <tr>
+                <td colspan="10" class="empty-msg">Nema otvorenih pozicija (Čekam signal iz MT5...)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 30-Day Daily P/L Chart Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h2 class="panel-title">POVIJEST DNEVNOG P/L (30 DANA)</h2>
+          </div>
+          <div class="chart-summary-badges">
+            <span class="badge-win">30D: <strong id="chart-total-profit" class="font-mono">$0.00</strong></span>
+            <span class="badge-stat">Dobitni dani: <strong id="chart-win-days">0</strong></span>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="dailyPnlChart"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Closed Trades History Panel (Last 20) -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h2 class="panel-title">ZADNJIH 20 ZATVORENIH TREJDOVA</h2>
+          <span class="count-pill" id="trades-count-tag">0 / 20</span>
+        </div>
+        <div class="trade-stats-bar">
+          <span>Win Rate: <strong id="trades-win-rate" class="font-mono text-success">0%</strong></span>
+          <span>Dobitni: <strong id="trades-win-count" class="font-mono text-success">0</strong></span>
+          <span>Gubitni: <strong id="trades-loss-count" class="font-mono text-danger">0</strong></span>
+          <span>Ukupno zatvoreno: <strong id="trades-total-profit" class="font-mono">$0.00</strong></span>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>DEAL TICKET</th>
+              <th>SIMBOL</th>
+              <th>MAGIC NUMBER</th>
+              <th>PROFIT (USD)</th>
+              <th>PROFIT (PIPS)</th>
+              <th>REZULTAT</th>
+              <th>VRIJEME ZATVARANJA</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody">
+            <tr>
+              <td colspan="7" class="empty-msg">Učitavam povijest zatvorenih trejdova...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="dashboard-footer">
+    <div class="footer-left">
+      <span>MT5 Dashboard v1.0 • Oracle VPS (92.5.176.43) • SQLite Engine</span>
+    </div>
+    <div class="footer-right">
+      <span id="footer-last-sync">Zadnja sinkronizacija: ---</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
